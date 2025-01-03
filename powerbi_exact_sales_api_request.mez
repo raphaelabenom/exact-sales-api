@@ -1,0 +1,32 @@
+let
+    // Params
+    URL     = "https://api.exactspotter.com/v3/",  
+    Token   = "SUA_API_EXACT_SALES",
+    RelativePath = "sdrs",
+    Limit   = 500,
+
+    // Function
+    GetEntityRaw = (RecordStart as text) =>
+        let 
+            Options     = [
+                Headers = [#"token_exact" = Token, #"Content-Type" = "application/json"],
+                Query = [#"token_exact" = Token, #"$skip" = RecordStart, #"$top" = Text.From(Limit)]
+            ],
+            Source      = Json.Document(Web.Contents(URL & RelativePath, Options)),
+            Result      = Source[value],
+            toTable     = Table.FromList(Result, Splitter.SplitByNothing(), null, null, ExtraValues.Error)
+        in
+            toTable,
+            
+    // Function
+    GetEntity = (optional RecordStart as text) as table =>
+        let
+            result      = GetEntityRaw(RecordStart),
+            nextStart   = if Table.RowCount(result) > 0 then Text.From(Number.From(RecordStart) + Limit) else null,
+            nextTable   = if Table.RowCount(result) > 0 then Table.Combine({result, @GetEntity(nextStart)}) else result,
+            buffered    = try Table.Buffer(nextTable) otherwise result
+        in
+            buffered,
+    resultTable = GetEntity("0")
+in
+    resultTable
